@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Badge, Button, Modal, Image } from 'react-bootstrap';
+import { Card, Badge, Button, Modal, OverlayTrigger, Tooltip } from 'react-bootstrap';
+import { useTheme } from '../context/ThemeContext';
 
 const BookmarkCard = ({ bookmark, onDelete }) => {
   const [showFullSummary, setShowFullSummary] = useState(false);
-  const [faviconSrc, setFaviconSrc] = useState(bookmark.favicon || '');
+  const [faviconSrc, setFaviconSrc] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
+  const { isDark } = useTheme();
   
   // Extract domain for display and favicon fallback
   let domain = '';
@@ -14,28 +17,16 @@ const BookmarkCard = ({ bookmark, onDelete }) => {
     domain = 'Invalid URL';
   }
 
-  // Set up favicon fallback logic
+  // Set up favicon from Google's favicon service
   useEffect(() => {
-    if (bookmark.favicon) {
-      setFaviconSrc(bookmark.favicon);
-    }
-  }, [bookmark.favicon]);
+    const faviconUrl = `https://www.google.com/s2/favicons?domain=${bookmark.url}&sz=64`;
+    setFaviconSrc(faviconUrl);
+  }, [bookmark.url]);
 
   // Handle favicon load error
   const handleFaviconError = () => {
-    // If original favicon failed, try domain/favicon.ico
-    if (faviconSrc === bookmark.favicon && domain !== 'Invalid URL') {
-      // Make sure domain has proper protocol
-      let domainWithProtocol = domain;
-      if (!domain.startsWith('http')) {
-        domainWithProtocol = `https://${domain}`;
-      }
-      const fallbackFavicon = `${domainWithProtocol}/favicon.ico`;
-      setFaviconSrc(fallbackFavicon);
-    } else {
-      // If fallback also failed, hide the favicon
-      setFaviconSrc('');
-    }
+    // Use a placeholder if favicon fails to load
+    setFaviconSrc('https://placehold.co/24x24?text=🔖');
   };
 
   // Format date
@@ -43,10 +34,17 @@ const BookmarkCard = ({ bookmark, onDelete }) => {
     ? new Date(bookmark.createdAt).toLocaleDateString()
     : '';
   
-  // Handle delete
-  const handleDelete = () => {
+  // Handle delete with loading state
+  const handleDelete = async () => {
     if (window.confirm('Are you sure you want to delete this bookmark?')) {
-      onDelete(bookmark._id);
+      setIsDeleting(true);
+      try {
+        await onDelete(bookmark._id);
+      } catch (err) {
+        console.error('Error in deletion:', err);
+      } finally {
+        setIsDeleting(false);
+      }
     }
   };
 
@@ -60,46 +58,28 @@ const BookmarkCard = ({ bookmark, onDelete }) => {
 
   return (
     <>
-      <Card className="h-100 shadow-sm hover-shadow transition-all">
+      <Card className="h-100 bookmark-card shadow-sm hover-shadow transition-all">
         <Card.Body className="d-flex flex-column">
-          {/* Header with title and delete button */}
-          <div className="d-flex justify-content-between mb-2">
-            <div className="w-100 pe-2">
-              <div className="d-flex align-items-start">
-                {/* Favicon with fallback */}
-                {faviconSrc && (
-                  <Image 
-                    src={faviconSrc} 
-                    alt="Site icon" 
-                    width={16} 
-                    height={16} 
-                    className="me-2 mt-1 flex-shrink-0"
-                    onError={handleFaviconError} 
-                  />
-                )}
-                {/* Title with word break for long titles */}
-                <Card.Title className="mb-0 h5" style={{ wordBreak: 'break-word' }}>
-                  <a
-                    href={bookmark.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-decoration-none text-primary"
-                  >
-                    {bookmark.title}
-                  </a>
-                </Card.Title>
-              </div>
-            </div>
-            {/* Delete button with trash icon */}
-            <Button
-              variant="link"
-              className="p-0 text-danger ms-1 flex-shrink-0"
-              onClick={handleDelete}
-              aria-label="Delete bookmark"
-              style={{ height: 'fit-content' }}
-            >
-              <i className="bi bi-trash-fill">X</i>
-            </Button>
+          {/* Header with title and favicon */}
+          <div className="d-flex mb-2">
+            <img 
+              src={faviconSrc} 
+              alt="Site Icon"
+              width="24"
+              height="24"
+              className="me-2 flex-shrink-0"
+              onError={handleFaviconError} 
+            />
+            <Card.Title className="mb-0 line-clamp-2" style={{ wordBreak: 'break-word' }}>
+              <a
+                href={bookmark.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-decoration-none text-primary"
+              >
+                {bookmark.title}
+              </a>
+            </Card.Title>
           </div>
           
           {/* URL and date */}
@@ -121,7 +101,7 @@ const BookmarkCard = ({ bookmark, onDelete }) => {
           {/* Summary with truncation and see more button */}
           {hasSummary && (
             <div className="mb-3">
-              <Card.Text className="text-secondary small mb-1">
+              <Card.Text className="text-secondary small mb-1 line-clamp-2">
                 {truncatedSummary}
               </Card.Text>
               {isLongSummary && (
@@ -137,20 +117,63 @@ const BookmarkCard = ({ bookmark, onDelete }) => {
           )}
           
           {/* Tags */}
-          <div className="mt-auto">
-            {bookmark.tags && bookmark.tags.length > 0 && (
-              <div className="d-flex flex-wrap gap-1">
-                {bookmark.tags.map((tag, index) => (
-                  <Badge
-                    key={index}
-                    bg="primary"
-                    className="bg-opacity-10 text-primary rounded-pill fw-normal"
-                  >
-                    {tag}
-                  </Badge>
-                ))}
-              </div>
-            )}
+          {bookmark.tags && bookmark.tags.length > 0 && (
+            <div className="d-flex flex-wrap mb-3">
+              {bookmark.tags.map((tag, index) => (
+                <Badge
+                  key={index}
+                  bg={isDark ? "secondary" : "light"}
+                  text={isDark ? "light" : "dark"}
+                  className="me-1 mb-1"
+                >
+                  #{tag}
+                </Badge>
+              ))}
+            </div>
+          )}
+          
+          {/* Actions */}
+          <div className="mt-auto d-flex justify-content-between align-items-center">
+            <small className="text-muted">
+              {formattedDate}
+            </small>
+            
+            <div>
+              <OverlayTrigger
+                placement="top"
+                overlay={<Tooltip>Visit bookmark</Tooltip>}
+              >
+                <Button 
+                  variant="outline-primary" 
+                  size="sm" 
+                  href={bookmark.url} 
+                  target="_blank"
+                  rel="noopener noreferrer" 
+                  className="me-2"
+                >
+                  <i className="bi bi-box-arrow-up-right"></i>
+                </Button>
+              </OverlayTrigger>
+              
+              <OverlayTrigger
+                placement="top"
+                overlay={<Tooltip>Delete bookmark</Tooltip>}
+              >
+                <Button 
+                  variant="outline-danger" 
+                  size="sm" 
+                  onClick={handleDelete}
+                  disabled={isDeleting}
+                  aria-label="Delete bookmark"
+                >
+                  {isDeleting ? (
+                    <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                  ) : (
+                    <i className="bi bi-trash"></i>
+                  )}
+                </Button>
+              </OverlayTrigger>
+            </div>
           </div>
         </Card.Body>
       </Card>
