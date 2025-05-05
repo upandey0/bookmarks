@@ -5,7 +5,7 @@ import App from './App';
 import { AuthProvider } from './context/AuthContext';
 import axios from 'axios';
 import 'bootstrap/dist/css/bootstrap.min.css';
-axios.defaults.baseURL = 'http://localhost:5000';
+axios.defaults.baseURL = process.env.VITE_API_BASE_URL || 'https://bookmarks-mmz9.onrender.com';
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
